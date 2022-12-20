@@ -16,12 +16,12 @@ tags_raw <- read_csv("04-data-final/tag-position.csv")
 
 pl_dt <- 
   party_raw %>% 
-  filter(! is.na(position)) %>% 
+  filter(! is.na(position_1)) %>% 
   mutate(
     tags = ifelse(tags >= 5, 5, tags) %>% factor() %>% fct_recode(`> 4` = "5"),
     tags_position = if_else(is.na(tags_position), "no", "yes") %>% fct_rev(),
-    position_lo = if_else(position_lo < -2.5, -2.5, position_lo),
-    position_up = if_else(position_up > 2.5, 2.5, position_up)
+    position_lo = if_else(position_1_lo < -2.5, -2.5, position_1_lo),
+    position_up = if_else(position_1_up > 2.5, 2.5, position_1_up)
   ) %>% 
   arrange(country_name)
 
@@ -33,16 +33,16 @@ plot_country <- function(country_select) {
   dodge_param = position_dodge2(width = 0.75)
   
   pl <- 
-    ggplot(pl_tmp, aes(1, position, label = name_short)) +
+    ggplot(pl_tmp, aes(1, position_1, label = name_short)) +
     geom_linerange(
-      aes(ymin = position_lo, ymax = position_up, group = desc(position)),
+      aes(ymin = position_1_lo, ymax = position_1_up, group = desc(position_1)),
       size = 1, alpha = 0.25, position = dodge_param
     ) +
     geom_point(
-      aes(group = desc(position), shape = tags, colour = tags_position),
+      aes(group = desc(position_1), shape = tags, colour = tags_position),
       position = dodge_param
     ) +
-    geom_text_repel(aes(group = desc(position)), size = 3, position = dodge_param) +
+    geom_text_repel(aes(group = desc(position_1)), size = 3, position = dodge_param) +
     coord_flip() +
     labs(title = country_select, x = NULL, y = NULL) +
     theme_minimal() +

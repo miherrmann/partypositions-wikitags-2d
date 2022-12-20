@@ -7,7 +7,7 @@ library(glue)
 
 ## Get data ----
 
-pos_tags <- read_csv("03-estimation/estimation-results/positions-parties-m2.csv")
+pos_tags <- read_csv("03-estimation/estimation-results/positions-2d-parties-m2.csv")
 
 path_pf <- "01-data-sources/01-partyfacts/"
 
@@ -32,7 +32,7 @@ cv_pf <-
 
 cv_dt <-
   pf_dt %>%
-  filter(dataset_key %in% c("ches", "kitschelt", "manifesto", "wvs")) %>%
+  filter(dataset_key %in% "ches") %>%
   left_join(ctry_continent) %>%
   group_by(continent, dataset_key) %>%
   summarise(n = n()) %>%
@@ -42,7 +42,7 @@ cv <-
   cv_pf %>%
   left_join(cv_dt) %>%
   rbind(., c( "TOTAL", colSums(select_if(., is.numeric)))) %>%
-  select(continent:tags, manifesto, wvs, kitschelt, ches)
+  select(continent:tags, ches)
 
 
 write_csv(cv, "06-figures-tables/tab-coverage.csv")

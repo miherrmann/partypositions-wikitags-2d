@@ -26,14 +26,15 @@ options(
 ```{r}
 suppressMessages(library(rstan))
 
-wp_model <- 2  # set Model to estimate -- M1 or M2
+wp_model <- 2  # set model to estimate -- M1 or M2
 
-file_wikipedia <- "../01-data-sources/02-wikipedia/wikipedia-data/01-wp-data-json.zip"
+file_wikipedia <-
+  "../01-data-sources/02-wikipedia/wikipedia-data/01-wp-data-json.zip"
 file_wikipedia_date <- substr(file.info(file_wikipedia)$mtime, 1, 10)
 
 file_estimation <- list.files(
-  "../03-estimation/estimation-model", 
-  pattern = sprintf("02-stan-samples-m%d_[[:digit:]].csv", wp_model),
+  "../03-estimation/estimation-model",
+  pattern = sprintf("02-stan-samples-2d-m%d_[[:digit:]].csv", wp_model),
   full.names = TRUE
 )
 file_estimation_date <- substr(file.info(file_estimation)$mtime, 1, 10)
@@ -52,19 +53,22 @@ stan_out <- read_stan_csv(file_estimation)
 ```
 
 ```{r}
-params <- setNames(c("a", "b", "o", "x"), nm = c("alpha", "beta", "o", "x"))
+params <- setNames(
+  c("delta", "lambda_1", "lambda_2", "beta", "x_1", "x_2"),
+  nm = c("delta", "lambda_1", "lambda_2", "beta", "x_1", "x_2")
+)
 
 if (wp_model == 2) {
-  
-  params <- c(setNames(c("g", "t"), nm = c("gamma", "tau")), params)
-  
+
+  params <- c(setNames(c("gamma", "tau"), nm = c("gamma", "tau")), params)
+
 }
 
 pl_params <- substr(params, 1, 1)
 n_params <- length(params)
 
 posterior_stats <- summary(stan_out, pars = params)$summary
-samples <- extract(stan_out, pars = params)
+samples <- rstan::extract(stan_out, pars = params)
 ```
 
 ```{r}
@@ -73,7 +77,7 @@ get_df <- function(var) {
   rows_param <- lapply(
     params,
     function(.x) grep(
-      paste0(.x, "($|\\[[[:digit:]]*\\]$)"), 
+      paste0(.x, "($|\\[[[:digit:]]*\\]$)"),
       rownames(posterior_stats)
     )
   )
@@ -81,31 +85,33 @@ get_df <- function(var) {
 
   quantile_select <- c(0.99, 0.95, 0.9, 0.75, 0.5)
   digits <- 3
-  
+
   if (var == "n_eff") {
-    
+
     quantile_select <- abs(quantile_select - 1)
     digits <- 0
-    
+
   }
 
   dt <- data.frame(
-    maxmin = round(sapply(param_stat, max), digits),
-    quant = t(round(sapply(param_stat, quantile, quantile_select), digits)),
-    mean = round(sapply(param_stat, mean), digits),
+    maxmin = round(sapply(param_stat, max, na.rm = TRUE), digits),
+    quant = t(
+      round(sapply(param_stat, quantile, quantile_select, na.rm = TRUE), digits)
+    ),
+    mean = round(sapply(param_stat, mean, na.rm = TRUE), digits),
     N_par = sapply(param_stat, length)
   )
   if (var == "n_eff") {
-    
-    dt$maxmin <- round(sapply(param_stat, min), digits)
+
+    dt$maxmin <- round(sapply(param_stat, min, na.rm = TRUE), digits)
 
   }
-  
+
   names(dt) <- gsub("maxmin", ifelse(var == "n_eff", "min", "max"), names(dt))
   names(dt) <- gsub("quant\\.", "", names(dt))
   names(dt) <- gsub("\\.$", "%", names(dt))
   rownames(dt) <- names(params)
-  
+
   return(dt)
 }
 ```
@@ -125,23 +131,26 @@ get_df("n_eff")
 
 ## SD / Mean checks
 
-Confirming $\bar{x} = 0$
+Confirming $\bar{\hat{x}_1} = \bar{\hat{x}_2} = 0$
 
 ```{r}
-round(mean(samples$x), 3)
+round(mean(samples$x_1), 3)
+round(mean(samples$x_2), 3)
 ```
 
-Confirming $\text{SD}(x) = 1$
+Confirming $\text{SD}(\hat{x}_1) = \text{SD}(\hat{x}_2) = 1$
 
 ```{r}
-round(sd(samples$x), 3)
+round(sd(samples$x_2), 3)
+round(sd(samples$x_2), 3)
 ```
 
 
 ## Distribution parties
 
 ```{r}
-plot(density(apply(samples$x, 2, mean)), main = "")
+plot(density(apply(samples$x_1, 2, median)), main = "1st dim")
+plot(density(apply(samples$x_2, 2, median)), main = "2nd dim")
 ```
 
 
@@ -155,22 +164,22 @@ __Plots only presented for critical values__
 
 ```{r}
 check_condition <- function(var_1, operator, var_2) {
-  
+
    operator(var_1, var_2)
-  
+
 }
 
 get_plots <- function(var, operator, value) {
-  
+
   select <- which(check_condition(posterior_stats[, var], operator, value))
   pars <- rownames(posterior_stats[select, ])
 
   if (! is.null(pars)) {
-    
+
     traceplot(stan_out, pars = pars)
 
   }
-  
+
 }
 ```
 

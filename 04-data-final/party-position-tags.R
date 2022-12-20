@@ -10,8 +10,8 @@ library(glue)
 pf_raw <- read_csv("01-data-sources/01-partyfacts/core-parties.csv", guess_max = 10000)
 pf_ctry_raw <- read_csv("01-data-sources/01-partyfacts/countries.csv")
 wp_raw <- read_csv("02-data-preparation/01-wp-infobox.csv")
-est_pa_raw <- read_csv("03-estimation/estimation-results/positions-parties-m2.csv")
-est_tag_raw <- read_csv("03-estimation/estimation-results/positions-tags-m2.csv")
+est_pa_raw <- read_csv("03-estimation/estimation-results/positions-2d-parties-m2.csv")
+est_tag_raw <- read_csv("03-estimation/estimation-results/positions-2d-tags-m2.csv")
 
 
 ## Data clean-up ----
@@ -19,11 +19,18 @@ est_tag_raw <- read_csv("03-estimation/estimation-results/positions-tags-m2.csv"
 est_pa <-
   est_pa_raw %>%
   rename(
-    position = x,
-    position_lo = lo,
-    position_up = up,
+    position_1 = x_1,
+    position_1_lo = lo_1,
+    position_1_up = up_1,
+    position_2 = x_2,
+    position_2_lo = lo_2,
+    position_2_up = up_2,
   ) %>%
-  mutate_at(c("position", "position_lo", "position_up"), round, 3)
+  mutate_at(
+    paste0(rep_len("position_", 6), rep(1:2, each = 3), c("", "_lo", "_up")),
+    round,
+    digits = 3
+  )
 
 
 clean_ideology <-  function(.x) str_replace_all(.x, "[^\\p{L}]", " ")
@@ -32,7 +39,9 @@ wp <-
   wp_raw %>%
   mutate(
     tag_ignore = if_else(
-      source == "ideology" & ! clean_ideology(position) %in% clean_ideology(est_tag_raw$ideology), 1, 0
+      source == "ideology" & ! clean_ideology(position) %in% clean_ideology(est_tag_raw$ideology),
+      1,
+      0
       ),
     position = ifelse(tag_ignore, glue("[ {position} ]"), position)
     )
@@ -40,7 +49,7 @@ wp <-
 
 ## Table with parties and tags ----
 
-pf_country <- pf_ctry_raw %>% select(country, country_name=name, continent)
+pf_country <- pf_ctry_raw %>% select(country, country_name = name, continent)
 
 # add continent to Party Facts data
 pf_pa <-

@@ -1,5 +1,5 @@
 ---
-title: "Validation Wikipedia positions"
+title: "Validation CA positions"
 date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
 output:
   html_notebook:
@@ -8,6 +8,7 @@ output:
     toc_float: yes
 ---
 <style type="text/css"> <!-- .table { width: auto } ---> </style>
+---
 
 ```{r options, include=FALSE}
 knitr::opts_chunk$set(
@@ -24,7 +25,6 @@ options(
 )
 ```
 
-
 ```{r sources, message=FALSE}
 library(tidyverse)
 
@@ -40,17 +40,27 @@ file_estimation <- "../03-estimation/estimation-model/02-stan-samples-2d-m2_1.cs
 file_estimation_date <- substr(file.info(file_estimation)$mtime, 1, 10)
 ```
 
-Model 2 data information
+
+Correspondence analysis (CA) data information
 
 + Wikipedia data download -- `r file_wikipedia_date`
-+ Model estimation -- `r file_estimation_date`
++ CA estimation -- `r file_estimation_date`
 + [ date file modified ]
 
 Data used for validation
 
 + CHES -- Chapel Hill Expert Survey
 
+
 ```{r data}
+if (ca$cscore["conservatism", 1] < 0)
+  x_init_1 <- -x_init_1
+
+if (ca$cscore["euroscepticism", 2] > 0)
+  x_init_2 <- -x_init_2
+
+ca_raw <- tibble(partyfacts_id, dimension_1 = x_init_1, dimension_2 = x_init_2)
+
 pp_long <-
   pp_raw %>%
   select(country, where(is.numeric)) %>%
@@ -64,15 +74,7 @@ pp_long <-
 
 dt <-
   pp_long %>%
-  left_join(
-    select(
-      wp_raw,
-      partyfacts_id,
-      position_wp_1 = position_1,
-      position_wp_2 = position_2
-      ),
-    by = "partyfacts_id"
-    ) %>%
+  left_join(ca_raw, by = "partyfacts_id") %>%
   mutate(
     dataset = str_remove_all(variable, "_.*") %>% str_to_upper(),
     variable = str_remove(variable, "^.*?_"),
@@ -80,45 +82,40 @@ dt <-
   na.omit()
 
 pp_all <-
-  wp_raw %>%
-  select(partyfacts_id, position_1, position_2) %>%
+  ca_raw %>%
   left_join(pp_raw, by = "partyfacts_id")
 ```
 
 
 ## Left-right
 
-```{r left-right-graph, message=FALSE}
+```{r ca-lr-graph, message=FALSE}
 pl_dt <-
   dt %>%
   filter(variable == "left_right") %>%
-  select(dataset, left_right = position, dim_1_wikipedia_scores = position_wp_1)
+  select(dataset, left_right = position, dim_1_ca = dimension_1)
 
-pl_lr <- ggplot(pl_dt, aes(x = left_right, y = dim_1_wikipedia_scores)) +
+pl_lr_ca <- ggplot(pl_dt, aes(x = left_right, y = dim_1_ca)) +
   geom_smooth(method = lm, se = FALSE) +
-  geom_point(alpha = 0.3) +
-  facet_wrap(vars(dataset), scales = "free_x")
+  geom_point(alpha = 0.3)
 
-print(pl_lr)
-ggsave("ches-left-right.png", plot = pl_lr)
+print(pl_lr_ca)
 ```
 
 
 ## EU integration
 
-```{r eu-integration-graph, message=FALSE}
+```{r ca-eu-graph, message=FALSE}
 pl_dt <-
   dt %>%
   filter(variable == "eu_integration") %>%
-  select(dataset, eu_integration = position, dim_2_wikipedia_scores = position_wp_2)
+  select(dataset, eu_integration = position, dim_2_ca = dimension_2)
 
-pl_eu <- ggplot(pl_dt, aes(x = eu_integration, y = dim_2_wikipedia_scores)) +
+pl_eu_ca <- ggplot(pl_dt, aes(x = eu_integration, y = dim_2_ca)) +
   geom_smooth(method = lm, se = FALSE) +
-  geom_point(alpha = 0.3) +
-  facet_wrap(vars(dataset), scales = "free_x")
+  geom_point(alpha = 0.3)
 
-print(pl_eu)
-ggsave("ches-eu-integration.png", plot = pl_eu)
+print(pl_eu_ca)
 ```
 
 
@@ -128,10 +125,10 @@ ggsave("ches-eu-integration.png", plot = pl_eu)
 dt %>%
   group_by(dataset, variable) %>%
   summarise(
-    correlation = round(cor(position, position_wp_1, use = "na.or.complete"), 2),
+    correlation = round(cor(position, dimension_1, use = "na.or.complete"), 2),
     .groups = "drop"
     ) %>%
-  arrange(desc(correlation)) %>%
+  arrange(desc(abs(correlation))) %>%
   knitr::kable()
 ```
 
@@ -143,10 +140,10 @@ dt %>%
 dt %>%
   group_by(dataset, variable) %>%
   summarise(
-    correlation = round(cor(position, position_wp_2, use = "na.or.complete"), 2),
+    correlation = round(cor(position, dimension_2, use = "na.or.complete"), 2),
     .groups = "drop"
     ) %>%
-  arrange(desc(correlation)) %>%
+  arrange(desc(abs(correlation))) %>%
   knitr::kable()
 ```
 
@@ -161,8 +158,8 @@ tibble(
     cor(pp_all$ches_left_right, pp_all$ches_eu_integration, use = "na.or.complete"),
     2
   ),
-  "Wikipedia scores" = round(
-    cor(pp_all$position_1, pp_all$position_2, use = "na.or.complete"),
+  CA = round(
+    cor(pp_all$dimension_1, pp_all$dimension_2, use = "na.or.complete"),
     2
   ),
 ) %>% knitr::kable()
@@ -181,40 +178,38 @@ pl_2d_ches <- ggplot(pl_dt, aes(x = left_right, y = eu_integration)) +
   geom_point(alpha = 0.3)
 
 print(pl_2d_ches)
-ggsave("ches-2d.png", plot = pl_2d_ches)
 ```
 
 
-## Wikipedia positions
+## CA scores
 
 ```{r wp-positions-graph, message = FALSE}
 ab_wp <- cbind(
-  coef(lm(ches_left_right ~ position_1 + position_2, data = pp_all)),
-  coef(lm(ches_eu_integration ~ position_1 + position_2, data = pp_all))
-)[paste0("position_", 1:2), ]
+  coef(lm(ches_left_right ~ dimension_1 + dimension_2, data = pp_all)),
+  coef(lm(ches_eu_integration ~ dimension_1 + dimension_2, data = pp_all))
+)[paste0("dimension_", 1:2), ]
 
 pl_dt <-
-  wp_raw %>%
-  select(dim_1_left_right = position_1, dim_2_eu_integration = position_2)
+  ca_raw %>%
+  select(dim_1_left_right = dimension_1, dim_2_eu_integration = dimension_2)
 
-pl_2d_wp <- ggplot(
+pl_2d_ca <- ggplot(
   pl_dt,
   aes(x = dim_1_left_right, y = dim_2_eu_integration)
 ) +
   geom_abline(
-    slope = ab_wp["position_2", 1] / ab_wp["position_1", 1],
+    slope = ab_wp["dimension_2", 1] / ab_wp["dimension_1", 1],
     intercept = 0,
     colour = "red",
     alpha = 0.5
 ) +
   geom_abline(
-    slope = ab_wp["position_2", 2] / ab_wp["position_1", 2],
+    slope = ab_wp["dimension_2", 2] / ab_wp["dimension_1", 2],
     intercept = 0,
     colour = "blue",
     alpha = 0.5
 ) +
   geom_point(alpha = 0.3)
 
-print(pl_2d_wp)
-ggsave("wp-2d.png", plot = pl_2d_wp)
+print(pl_2d_ca)
 ```

@@ -6,7 +6,7 @@ library(glue)
 library(ggrepel)
 
 
-tags_m2_raw <- read_csv("03-estimation/estimation-results/positions-tags-m2.csv")
+tags_m2_raw <- read_csv("03-estimation/estimation-results/positions-2d-tags-m2.csv")
 
 tags <- 
   tags_m2_raw %>% 
